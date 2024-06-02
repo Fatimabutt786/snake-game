@@ -1,0 +1,204 @@
+#include <iostream>
+#include <conio.h> // For kbhit() and getch()
+#include <windows.h> // For Sleep and console functions
+#include <vector> // For managing the snake body parts
+#include <ctime> // For random food generation
+
+using namespace std;
+
+const int width = 50;
+const int height = 10;
+int x, y, foodX, foodY, score;
+enum Direction { STOP = 0, LEFT, RIGHT, UP, DOWN };
+Direction dir;
+vector<pair<int, int>> snake;
+bool gameOver;
+bool isBigFood; // To track whether the food is big or small
+
+void Setup() {
+    srand(time(0));
+    dir = RIGHT; // Default direction
+    x = width / 2;
+    y = height / 2;
+    foodX = rand() % width;
+    foodY = rand() % height;
+    score = 0;
+    gameOver = false;
+    snake.clear();
+    // Initial snake length of 3
+    snake.push_back(make_pair(x, y));
+    snake.push_back(make_pair(x - 1, y));
+    snake.push_back(make_pair(x - 2, y));
+    isBigFood = false; // Start with small food
+}
+
+void HideCursor() {
+    HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+    CONSOLE_CURSOR_INFO info;
+    info.dwSize = 100;
+    info.bVisible = FALSE;
+    SetConsoleCursorInfo(consoleHandle, &info);
+}
+
+void SetCursorPosition(int x, int y) {
+    COORD pos = { static_cast<SHORT>(x), static_cast<SHORT>(y) };
+    HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
+    SetConsoleCursorPosition(output, pos);
+}
+
+void SetColor(int color) {
+    SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), color);
+}
+
+void Draw() {
+    // Draw top border
+    SetCursorPosition(0, 0);
+    for (int i = 0; i < width + 2; ++i) cout << '#';
+    cout << endl;
+
+    // Draw the game area
+    for (int i = 0; i < height; ++i) {
+        SetCursorPosition(0, i + 1);
+        for (int j = 0; j < width; ++j) {
+            if (j == 0) cout << '#'; // Left border
+
+            bool print = false;
+            for (size_t k = 0; k < snake.size(); k++) { // use size_t for unsigned comparison
+                if (snake[k].first == j && snake[k].second == i) {
+                    SetColor(10); // Snake body
+                    cout << '*';
+                    SetColor(7); // Reset color
+                    print = true;
+                    break;
+                }
+            }
+
+            if (!print) {
+                if (i == foodY && j == foodX) {
+                    SetColor(isBigFood ? 12 : 9); // Big food in red, small food in blue
+                    cout << (isBigFood ? 'B' : 'S');
+                    SetColor(7); // Reset color
+                } else {
+                    cout << ' ';
+                }
+            }
+
+            if (j == width - 1) cout << '#'; // Right border
+        }
+        cout << endl;
+    }
+
+    // Draw bottom border
+    SetCursorPosition(0, height + 1);
+    for (int i = 0; i < width + 2; ++i) cout << '#';
+    cout << endl;
+
+    // Draw score
+    SetCursorPosition(0, height + 2);
+    cout << "Score: " << score << endl;
+}
+
+void ClearPreviousPosition(pair<int, int> position) {
+    SetCursorPosition(position.first + 1, position.second + 1);
+    cout << ' ';
+}
+
+void DrawNewPosition(pair<int, int> position, char symbol, int color) {
+    SetCursorPosition(position.first + 1, position.second + 1);
+    SetColor(color);
+    cout << symbol;
+    SetColor(7); // Reset color
+}
+
+void Input() {
+    if (_kbhit()) {
+        switch (_getch()) {
+        case 'a':
+        case 75: // Left arrow key
+            if (dir != RIGHT) dir = LEFT;
+            break;
+        case 'd':
+        case 77: // Right arrow key
+            if (dir != LEFT) dir = RIGHT;
+            break;
+        case 'w':
+        case 72: // Up arrow key
+            if (dir != DOWN) dir = UP;
+            break;
+        case 's':
+        case 80: // Down arrow key
+            if (dir != UP) dir = DOWN;
+            break;
+        }
+    }
+}
+
+void Logic() {
+    // Move snake
+    pair<int, int> head = snake.front();
+    pair<int, int> prev_tail = snake.back();
+    switch (dir) {
+    case LEFT:
+        head.first--;
+        break;
+    case RIGHT:
+        head.first++;
+        break;
+    case UP:
+        head.second--;
+        break;
+    case DOWN:
+        head.second++;
+        break;
+    case STOP:
+        return; // Do nothing if the direction is STOP
+    }
+    snake.insert(snake.begin(), head);
+
+    // Check for collision with food
+    if (head.first == foodX && head.second == foodY) {
+        score += isBigFood ? 20 : 10;
+        do {
+            foodX = rand() % width;
+            foodY = rand() % height;
+        } while (foodX == 0 || foodX == width - 1 || foodY == 0 || foodY == height - 1);
+        isBigFood = rand() % 2;
+    } else {
+        snake.pop_back();
+    }
+
+    // Check for collision with wall or itself
+    if (head.first < 0 || head.first >= width || head.second < 0 || head.second >= height) {
+        gameOver = true;
+    }
+    for (size_t i = 1; i < snake.size(); i++) { // use size_t for unsigned comparison
+        if (snake[i].first == head.first && snake[i].second == head.second) {
+            gameOver = true;
+            break;
+        }
+    }
+
+    // Clear previous tail position
+    ClearPreviousPosition(prev_tail);
+
+    // Draw new head position
+    DrawNewPosition(head, '*', 10);
+
+    // Draw food position
+    DrawNewPosition(make_pair(foodX, foodY), isBigFood ? 'B' : 'S', isBigFood ? 12 : 9);
+}
+
+int main() {
+    Setup();
+    HideCursor();
+    Draw();
+    while (!gameOver) {
+        Input();
+        Logic();
+        Sleep(300); // Adjust snake speed here (milliseconds)
+    }
+    SetCursorPosition(0, height + 3);
+    cout << "Game Over!" << endl;
+    cout << "Final Score: " << score << endl;
+    return 0;
+}
